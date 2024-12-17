@@ -231,25 +231,69 @@ export const getStaticProps: GetStaticProps<Props, Params> = async ({ params }) 
 };
 
 export async function getStaticPaths() {
-	const data = await request(
-		process.env.NEXT_PUBLIC_HASHNODE_GQL_ENDPOINT,
-		SlugPostsByPublicationDocument,
-		{
-			first: 10,
-			host: process.env.NEXT_PUBLIC_HASHNODE_PUBLICATION_HOST,
-		},
-	);
+    console.log("getStaticPaths - NEXT_PUBLIC_HASHNODE_PUBLICATION_HOST:", process.env.NEXT_PUBLIC_HASHNODE_PUBLICATION_HOST)
+    const data = await request(
+        process.env.NEXT_PUBLIC_HASHNODE_GQL_ENDPOINT,
+        SlugPostsByPublicationDocument,
+        {
+            first: 10,
+            host: process.env.NEXT_PUBLIC_HASHNODE_PUBLICATION_HOST,
+        },
+    );
 
-	const postSlugs = (data.publication?.posts.edges ?? []).map((edge) => edge.node.slug);
+    const postSlugs = (data.publication?.posts.edges ?? []).map((edge) => edge.node.slug);
 
-	return {
-		paths: postSlugs.map((slug) => {
-			return {
-				params: {
-					slug: slug,
-				},
-			};
-		}),
-		fallback: 'blocking',
-	};
+    return {
+        paths: postSlugs.map((slug) => {
+            return {
+                params: {
+                    slug: slug,
+                },
+            };
+        }),
+        fallback: 'blocking',
+    };
 }
+
+export const getStaticProps: GetStaticProps<Props, Params> = async ({ params }) => {
+    if (!params) {
+        throw new Error('No params');
+    }
+
+    const endpoint = process.env.NEXT_PUBLIC_HASHNODE_GQL_ENDPOINT;
+    const host = process.env.NEXT_PUBLIC_HASHNODE_PUBLICATION_HOST;
+    console.log("getStaticProps - NEXT_PUBLIC_HASHNODE_PUBLICATION_HOST:", host)
+    const slug = params.slug;
+
+    const postData = await request(endpoint, SinglePostByPublicationDocument, { host, slug });
+
+    if (postData.publication?.post) {
+        return {
+            props: {
+                type: 'post',
+                post: postData.publication.post,
+                publication: postData.publication,
+            },
+            revalidate: 1,
+        };
+    }
+
+    const pageData = await request(endpoint, PageByPublicationDocument, { host, slug });
+
+    if (pageData.publication?.staticPage) {
+        return {
+            props: {
+                type: 'page',
+                page: pageData.publication.staticPage,
+                publication: pageData.publication,
+            },
+            revalidate: 1,
+        };
+    }
+
+    return {
+        notFound: true,
+        revalidate: 1,
+    };
+};
+
